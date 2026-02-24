@@ -1,0 +1,47 @@
+{
+  "experiment_info": {
+    "title": "Long CoT 分子结构提示词工程对比实验 - 演示数据",
+    "description": "这是模拟数据，用于展示实验结果格式。由于 API 余额不足，无法获取真实数据。",
+    "model": "GLM-5 (模拟)",
+    "timestamp": "2026-02-24T11:00:00",
+    "note": "此数据为演示用途，非真实 API 响应"
+  },
+  "results": [
+    {
+      "experiment_id": "DEMO-MATH-001-baseline",
+      "problem_id": "MATH-001",
+      "problem_category": "数学",
+      "template_type": "baseline",
+      "template_name": "基线（Baseline）",
+      "question": "一个袋子里有5个红球和3个蓝球，连续取出3个球（不放回），求至少有2个红球的概率",
+      "response_text": "[模拟响应]\n至少有2个红球包括两种情况：2红1蓝和3红。\n\n情况1：2红1蓝\nP = C(5,2) × C(3,1) / C(8,3) = 10 × 3 / 56 = 30/56\n\n情况2：3红\nP = C(5,3) / C(8,3) = 10 / 56\n\n总概率 = 30/56 + 10/56 = 40/56 = 5/7\n\n答案：5/7",
+      "tokens_used": 180,
+      "response_time_ms": 1200,
+      "evaluation": {
+        "steps": 4,
+        "length": 280,
+        "has_answer": true
+      }
+    },
+    {
+      "experiment_id": "DEMO-MATH-001-full",
+      "problem_id": "MATH-001",
+      "problem_category": "数学",
+      "template_type": "full",
+      "template_name": "完整分子（Full）",
+      "question": "一个袋子里有5个红球和3个蓝球，连续取出3个球（不放回），求至少有2个红球的概率",
+      "response_text": "[模拟响应 - 完整分子模板]\n\n【初始化】\n→ 问题：计算至少2个红球的概率\n→ 变量：红球5个，蓝球3个，取3个\n→ 已知：不放回抽样\n\n【主干扩展】\n[D-1] 因为至少2红包括2红1蓝和3红两种情况\n[D-2] 因为 [D-1]，总概率 = P(2红1蓝) + P(3红)\n[D-3] 因为不放回，使用组合数计算\n\n【关键节点验证】\n[R-1] 验证 [D-3]\n├─ 假设反转：如果用独立事件计算会怎样？\n├─ 边界测试：红球数量变化时公式是否仍适用？\n└─ 结论：通过，组合数方法正确\n\n【分支探索】\n[E-1] 替代路径：分步计算每次取球概率\n├─ 复杂度：更高\n└─ 不采用\n\n【收敛整合】\nP(2红1蓝) = C(5,2) × C(3,1) / C(8,3) = 30/56\nP(3红) = C(5,3) / C(8,3) = 10/56\n总概率 = 40/56 = 5/7\n\n置信度：95%",
+      "tokens_used": 450,
+      "response_time_ms": 2800,
+      "evaluation": {
+        "steps": 8,
+        "length": 650,
+        "has_answer": true
+      }
+    }
+  ],
+  "analysis": {
+    "summary": "演示数据展示了不同模板的响应格式差异。完整分子模板的响应更长、更结构化，包含初始化、验证、探索等环节。",
+    "note": "真实实验需要 API 充值后执行"
+  }
+}
