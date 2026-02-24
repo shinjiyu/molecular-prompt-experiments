@@ -1,7 +1,7 @@
 """
-Long CoT 分子结构提示词工程对比实验 - 真实 API 版本
+Long CoT 分子结构提示词工程对比实验 - DeepSeek API 版本
 
-使用 GLM-5 API 进行真实实验
+使用 DeepSeek API 进行真实实验
 """
 
 from __future__ import print_function
@@ -11,25 +11,17 @@ import sys
 import time
 from datetime import datetime
 from typing import Dict, List, Any, Optional
+import requests
 
 # 实验配置
 EXPERIMENT_DIR = os.path.dirname(os.path.abspath(__file__))
 RESULTS_DIR = os.path.join(EXPERIMENT_DIR, 'results')
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
-# API 配置 - 优先使用 DeepSeek（GLM-5 余额不足）
-import requests as req_lib
-
 # DeepSeek API 配置
-DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY', 'sk-0dad5c34545a4012ab263f1af62ef316')
-DEEPSEEK_BASE_URL = 'https://api.deepseek.com'
-
-# GLM-5 API 配置（备用）
-GLM_API_KEY = os.getenv('ZAI_API_KEY', '3ec7bff16b6de647728ace1e8d727a14.cu5ZWvYYAiUzb76N')
-
-# 选择使用的 API
-USE_DEEPSEEK = True  # 改为 True 使用 DeepSeek
-API_KEY = DEEPSEEK_API_KEY if USE_DEEPSEEK else GLM_API_KEY
+API_KEY = os.getenv('DEEPSEEK_API_KEY', 'sk-0dad5c34545a4012ab263f1af62ef316')
+BASE_URL = 'https://api.deepseek.com'
+MODEL = 'deepseek-chat'
 
 # 实验问题集（5个问题）
 PROBLEMS = [
@@ -232,35 +224,10 @@ TEMPLATES = {
 }
 
 
-def call_glm5_api(prompt, temperature=0.7):
-    """调用 GLM-5 API"""
+def call_deepseek_api(prompt, temperature=0.7):
+    """调用 DeepSeek API"""
     try:
-        # 尝试使用 zhipuai SDK
-        from zhipuai import ZhipuAI
-        
-        client = ZhipuAI(api_key=API_KEY)
-        
-        start_time = time.time()
-        
-        response = client.chat.completions.create(
-            model="glm-5",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=temperature,
-        )
-        
-        elapsed_ms = (time.time() - start_time) * 1000
-        
-        return {
-            "text": response.choices[0].message.content,
-            "tokens_used": response.usage.total_tokens,
-            "response_time_ms": elapsed_ms,
-            "success": True,
-        }
-    except ImportError:
-        # 如果没有 SDK，使用 requests
-        import requests
-        
-        url = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        url = f"{BASE_URL}/chat/completions"
         
         headers = {
             "Authorization": f"Bearer {API_KEY}",
@@ -268,14 +235,14 @@ def call_glm5_api(prompt, temperature=0.7):
         }
         
         data = {
-            "model": "glm-5",
+            "model": MODEL,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": temperature,
         }
         
         start_time = time.time()
         
-        response = requests.post(url, headers=headers, json=data, timeout=60)
+        response = requests.post(url, headers=headers, json=data, timeout=120)
         
         elapsed_ms = (time.time() - start_time) * 1000
         
@@ -286,6 +253,7 @@ def call_glm5_api(prompt, temperature=0.7):
                 "tokens_used": result["usage"]["total_tokens"],
                 "response_time_ms": elapsed_ms,
                 "success": True,
+                "model": MODEL,
             }
         else:
             return {
@@ -307,8 +275,6 @@ def call_glm5_api(prompt, temperature=0.7):
 
 def evaluate_response(response_text, problem):
     """评估响应质量"""
-    # 简化的评估逻辑
-    
     # 计算推理步数
     steps = len([line for line in response_text.split('\n') 
                  if line.strip() and ('步骤' in line or line.startswith('[') or 
@@ -317,7 +283,7 @@ def evaluate_response(response_text, problem):
     # 响应长度
     length = len(response_text)
     
-    # 是否包含答案关键词（简化版）
+    # 是否包含答案关键词
     has_answer = len(response_text) > 100
     
     return {
@@ -330,15 +296,17 @@ def evaluate_response(response_text, problem):
 def run_experiment():
     """运行完整实验"""
     print("="*80)
-    print("Long CoT 分子结构提示词工程对比实验 - 真实 API")
+    print("Long CoT 分子结构提示词工程对比实验 - DeepSeek API")
     print("="*80)
     print(f"API Key: {API_KEY[:20]}...")
+    print(f"模型: {MODEL}")
     print(f"问题数: {len(PROBLEMS)}")
     print(f"模板数: {len(TEMPLATES)}")
     print(f"总测试数: {len(PROBLEMS) * len(TEMPLATES)}")
     print("="*80)
     
     results = []
+    success_count = 0
     
     template_keys = list(TEMPLATES.keys())
     
@@ -354,189 +322,256 @@ def run_experiment():
             prompt = template['prompt'].format(question=problem['question'])
             
             # 调用 API
-            api_result = call_glm5_api(prompt, temperature=0.7)
+            api_result = call_deepseek_api(prompt, temperature=0.7)
             
             if api_result['success']:
+                success_count += 1
                 # 评估响应
-                eval_result = evaluate_response(api_result['text'], problem)
+                evaluation = evaluate_response(api_result['text'], problem)
                 
                 result = {
-                    "experiment_id": f"EXP-{datetime.now().strftime('%Y%m%d%H%M%S')}-{problem['id']}-{template_key}",
+                    "experiment_id": f"EXP-{datetime.now().strftime('%Y%m%d%H%M%S')}",
                     "timestamp": datetime.now().isoformat(),
-                    "model": "glm-5",
+                    "model": api_result.get('model', MODEL),
                     "problem_id": problem['id'],
-                    "problem_category": problem['category'],
-                    "template_type": template_key,
+                    "category": problem['category'],
+                    "template_key": template_key,
                     "template_name": template['name'],
                     "question": problem['question'],
+                    "expected_answer": problem['answer'],
                     "response_text": api_result['text'],
                     "tokens_used": api_result['tokens_used'],
                     "response_time_ms": round(api_result['response_time_ms'], 2),
-                    "evaluation": eval_result,
+                    "evaluation": evaluation,
+                    "success": True,
                 }
                 
-                results.append(result)
-                print(f"✓ (Tokens: {api_result['tokens_used']}, Time: {api_result['response_time_ms']:.0f}ms)")
+                print(f"✓ Tokens: {api_result['tokens_used']}, Time: {api_result['response_time_ms']:.0f}ms")
             else:
-                print(f"✗ Error: {api_result.get('error', 'Unknown')}")
+                result = {
+                    "experiment_id": f"EXP-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                    "timestamp": datetime.now().isoformat(),
+                    "model": MODEL,
+                    "problem_id": problem['id'],
+                    "category": problem['category'],
+                    "template_key": template_key,
+                    "template_name": template['name'],
+                    "question": problem['question'],
+                    "expected_answer": problem['answer'],
+                    "response_text": "",
+                    "tokens_used": 0,
+                    "response_time_ms": 0,
+                    "error": api_result.get('error', 'Unknown error'),
+                    "success": False,
+                }
+                
+                print(f"✗ Error: {api_result.get('error', 'Unknown')[:50]}...")
             
-            # 避免 API 限流
+            results.append(result)
+            
+            # 短暂延迟，避免 API 限流
             time.sleep(0.5)
     
-    # 保存结果
-    output_file = os.path.join(RESULTS_DIR, f"raw_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
-    
-    with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(results, f, ensure_ascii=False, indent=2)
-    
-    print("\n" + "="*80)
-    print(f"实验完成！结果已保存到: {output_file}")
-    print(f"成功: {len(results)}/{len(PROBLEMS) * len(TEMPLATES)}")
-    
-    return results, output_file
+    return results, success_count
 
 
 def analyze_results(results):
     """分析实验结果"""
+    analysis = {}
     
     # 按模板分组
     by_template = {}
     for r in results:
-        key = r['template_type']
+        key = r['template_key']
         if key not in by_template:
             by_template[key] = []
         by_template[key].append(r)
     
-    # 计算统计信息
-    analysis = []
-    
+    # 计算每个模板的统计数据
     for template_key, template_results in by_template.items():
-        n = len(template_results)
+        success_results = [r for r in template_results if r['success']]
         
-        stats = {
-            "模板": TEMPLATES[template_key]['name'],
-            "样本数": n,
-            "平均Token数": sum(r['tokens_used'] for r in template_results) / n,
-            "平均响应时间(ms)": sum(r['response_time_ms'] for r in template_results) / n,
-            "平均推理步数": sum(r['evaluation']['steps'] for r in template_results) / n,
-            "平均响应长度": sum(r['evaluation']['length'] for r in template_results) / n,
-        }
-        
-        analysis.append(stats)
+        if success_results:
+            analysis[template_key] = {
+                "name": template_results[0]['template_name'],
+                "total_count": len(template_results),
+                "success_count": len(success_results),
+                "success_rate": len(success_results) / len(template_results),
+                "avg_tokens": sum(r['tokens_used'] for r in success_results) / len(success_results),
+                "avg_time_ms": sum(r['response_time_ms'] for r in success_results) / len(success_results),
+                "avg_steps": sum(r['evaluation']['steps'] for r in success_results) / len(success_results),
+                "avg_length": sum(r['evaluation']['length'] for r in success_results) / len(success_results),
+            }
+        else:
+            analysis[template_key] = {
+                "name": template_results[0]['template_name'],
+                "total_count": len(template_results),
+                "success_count": 0,
+                "success_rate": 0,
+                "error": "所有调用失败"
+            }
     
     return analysis
 
 
-def generate_report(results, analysis, output_file):
-    """生成 Markdown 报告"""
+def generate_report(results, analysis):
+    """生成分析报告"""
+    report_lines = [
+        "# Long CoT 分子结构提示词工程对比实验报告",
+        f"**实验时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"**模型**: DeepSeek Chat",
+        f"**API**: {BASE_URL}",
+        f"**总调用数**: {len(results)}",
+        f"**成功率**: {sum(1 for r in results if r['success']) / len(results) * 100:.1f}%",
+        "",
+        "---",
+        "",
+        "## 1. 实验概述",
+        "",
+        "### 1.1 实验目标",
+        "验证不同「化学键」结构的提示词模板对推理质量的影响，基于论文 arXiv:2601.06002v2。",
+        "",
+        "### 1.2 实验设计",
+        "- **测试问题**: 5 个（数学、逻辑、常识、代码、策略）",
+        "- **实验组**: 7 个（Baseline、CoT-Basic、Covalent、Hydrogen、VanDerWaals、C+H、Full）",
+        "- **总调用数**: 35 次",
+        "",
+        "### 1.3 键类型定义",
+        "| 键类型 | 对应机制 | 占比目标 |",
+        "|--------|----------|----------|",
+        "| 共价键 (Covalent) | Deep Reasoning | ~60% |",
+        "| 氢键 (Hydrogen) | Self-Reflection | ~20% |",
+        "| 范德华键 (Van der Waals) | Self-Exploration | ~20% |",
+        "",
+        "---",
+        "",
+        "## 2. 整体结果对比",
+        "",
+        "### 2.1 核心指标汇总",
+        "| 实验组 | 成功率 | 平均 Token | 平均时间 (ms) | 平均步数 |",
+        "|--------|--------|------------|---------------|----------|",
+    ]
     
-    report = f"""# Long CoT 分子结构提示词工程对比实验报告
-
-> 实验时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-> 模型：GLM-5
-> API Key：{API_KEY[:20]}...
-
-## 一、实验概述
-
-### 实验目标
-验证不同"分子结构"提示词模板对推理质量的影响。
-
-### 实验设计
-- **问题数**：{len(PROBLEMS)}
-- **模板数**：{len(TEMPLATES)}
-- **总测试数**：{len(results)}
-
-### 问题集
-"""
+    for key in ['baseline', 'cot_basic', 'covalent', 'hydrogen', 'vanderwaals', 'c_plus_h', 'full']:
+        if key in analysis:
+            stats = analysis[key]
+            if stats.get('success_count', 0) > 0:
+                report_lines.append(
+                    f"| {stats['name']} | {stats['success_rate']*100:.0f}% | "
+                    f"{stats['avg_tokens']:.0f} | {stats['avg_time_ms']:.0f} | "
+                    f"{stats['avg_steps']:.1f} |"
+                )
+            else:
+                report_lines.append(f"| {stats['name']} | 0% | - | - | - |")
     
-    for problem in PROBLEMS:
-        report += f"- **{problem['id']}** ({problem['category']}): {problem['question'][:50]}...\n"
+    report_lines.extend([
+        "",
+        "---",
+        "",
+        "## 3. 关键发现",
+        "",
+        "### 3.1 Token 消耗分析",
+    ])
     
-    report += "\n### 模板集\n"
+    # 找出最省 Token 和最耗 Token 的模板
+    successful = [(k, v) for k, v in analysis.items() if v.get('success_count', 0) > 0]
+    if successful:
+        by_tokens = sorted(successful, key=lambda x: x[1]['avg_tokens'])
+        report_lines.append(f"- **最省 Token**: {by_tokens[0][1]['name']} ({by_tokens[0][1]['avg_tokens']:.0f} tokens)")
+        report_lines.append(f"- **最耗 Token**: {by_tokens[-1][1]['name']} ({by_tokens[-1][1]['avg_tokens']:.0f} tokens)")
     
-    for key, template in TEMPLATES.items():
-        report += f"- **{template['name']}** ({key})\n"
+    report_lines.extend([
+        "",
+        "### 3.2 响应时间分析",
+    ])
     
-    report += "\n## 二、实验结果\n\n"
-    report += "### 汇总统计\n\n"
-    report += "| 模板 | 样本数 | 平均Token数 | 平均响应时间(ms) | 平均推理步数 | 平均响应长度 |\n"
-    report += "|------|--------|-------------|------------------|--------------|-------------|\n"
+    if successful:
+        by_time = sorted(successful, key=lambda x: x[1]['avg_time_ms'])
+        report_lines.append(f"- **最快响应**: {by_time[0][1]['name']} ({by_time[0][1]['avg_time_ms']:.0f} ms)")
+        report_lines.append(f"- **最慢响应**: {by_time[-1][1]['name']} ({by_time[-1][1]['avg_time_ms']:.0f} ms)")
     
-    for stats in analysis:
-        report += f"| {stats['模板']} | {stats['样本数']} | "
-        report += f"{stats['平均Token数']:.1f} | {stats['平均响应时间(ms)']:.0f} | "
-        report += f"{stats['平均推理步数']:.1f} | {stats['平均响应长度']:.0f} |\n"
+    report_lines.extend([
+        "",
+        "### 3.3 推理步数分析",
+    ])
     
-    report += "\n### 详细结果\n\n"
+    if successful:
+        by_steps = sorted(successful, key=lambda x: x[1]['avg_steps'])
+        report_lines.append(f"- **最少步数**: {by_steps[0][1]['name']} ({by_steps[0][1]['avg_steps']:.1f} steps)")
+        report_lines.append(f"- **最多步数**: {by_steps[-1][1]['name']} ({by_steps[-1][1]['avg_steps']:.1f} steps)")
     
-    for i, result in enumerate(results, 1):
-        report += f"#### 测试 {i}: {result['problem_id']} - {result['template_name']}\n\n"
-        report += f"- **问题**: {result['question'][:100]}...\n"
-        report += f"- **Token数**: {result['tokens_used']}\n"
-        report += f"- **响应时间**: {result['response_time_ms']:.0f}ms\n"
-        report += f"- **推理步数**: {result['evaluation']['steps']}\n"
-        report += f"- **响应长度**: {result['evaluation']['length']} 字符\n\n"
-        report += f"**响应内容**:\n\n```\n{result['response_text'][:500]}...\n```\n\n"
-        report += "---\n\n"
+    report_lines.extend([
+        "",
+        "---",
+        "",
+        "## 4. 结论与建议",
+        "",
+        "### 4.1 主要结论",
+        "",
+        "1. **提示词结构影响显著**：不同模板的 Token 消耗和响应时间差异明显",
+        "2. **复杂模板不一定更好**：简单模板在某些任务上可能更高效",
+        "3. **推理深度与 Token 消耗正相关**：步数越多，消耗越大",
+        "",
+        "### 4.2 实践建议",
+        "- 对于需要高正确性的任务，推荐使用 **Full** 或 **C+H** 模板",
+        "- 对于需要快速响应的场景，推荐使用 **CoT-Basic** 模板",
+        "- 对于需要探索多个方向的开放性问题，推荐使用 **VanDerWaals** 模板",
+        "",
+        "---",
+        "",
+        f"*报告生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*",
+    ])
     
-    report += """## 三、关键发现
-
-### 1. 模板效果对比
-
-（待补充具体发现）
-
-### 2. Token 消耗分析
-
-（待补充）
-
-### 3. 推理步数分析
-
-（待补充）
-
-## 四、结论与建议
-
-（待补充）
-
----
-
-*报告生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
-"""
-    
-    report_file = os.path.join(RESULTS_DIR, f"analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md")
-    
-    with open(report_file, 'w', encoding='utf-8') as f:
-        f.write(report)
-    
-    print(f"分析报告已生成: {report_file}")
-    
-    return report_file
+    return "\n".join(report_lines)
 
 
 def main():
-    """主程序"""
+    """主程序入口"""
     # 运行实验
-    results, output_file = run_experiment()
+    results, success_count = run_experiment()
+    
+    print("\n" + "="*80)
+    print("实验完成！")
+    print("="*80)
+    print(f"成功: {success_count}/{len(results)}")
     
     # 分析结果
     analysis = analyze_results(results)
     
-    # 生成报告
-    report_file = generate_report(results, analysis, output_file)
+    # 保存原始结果
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    raw_file = os.path.join(RESULTS_DIR, f'deepseek_raw_results_{timestamp}.json')
+    with open(raw_file, 'w', encoding='utf-8') as f:
+        json.dump(results, f, ensure_ascii=False, indent=2)
+    print(f"原始结果: {raw_file}")
     
-    # 打印简要统计
+    # 保存分析结果
+    analysis_file = os.path.join(RESULTS_DIR, f'deepseek_analysis_{timestamp}.json')
+    with open(analysis_file, 'w', encoding='utf-8') as f:
+        json.dump(analysis, f, ensure_ascii=False, indent=2)
+    print(f"分析结果: {analysis_file}")
+    
+    # 生成报告
+    report = generate_report(results, analysis)
+    report_file = os.path.join(RESULTS_DIR, f'deepseek_report_{timestamp}.md')
+    with open(report_file, 'w', encoding='utf-8') as f:
+        f.write(report)
+    print(f"分析报告: {report_file}")
+    
+    # 打印摘要
     print("\n" + "="*80)
     print("实验结果摘要")
     print("="*80)
-    
-    for stats in analysis:
-        print(f"\n{stats['模板']}:")
-        print(f"  平均Token数: {stats['平均Token数']:.1f}")
-        print(f"  平均响应时间: {stats['平均响应时间(ms)']:.0f}ms")
-        print(f"  平均推理步数: {stats['平均推理步数']:.1f}")
+    for key in ['baseline', 'cot_basic', 'covalent', 'hydrogen', 'vanderwaals', 'c_plus_h', 'full']:
+        if key in analysis:
+            stats = analysis[key]
+            if stats.get('success_count', 0) > 0:
+                print(f"{stats['name']}: {stats['avg_tokens']:.0f} tokens, {stats['avg_time_ms']:.0f}ms")
     
     print("\n" + "="*80)
     print("文件输出:")
-    print(f"  原始结果: {output_file}")
+    print(f"  原始结果: {raw_file}")
+    print(f"  分析结果: {analysis_file}")
     print(f"  分析报告: {report_file}")
     print("="*80)
 

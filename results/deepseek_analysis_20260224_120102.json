@@ -1,0 +1,51 @@
+{
+  "baseline": {
+    "name": "基线（Baseline）",
+    "total_count": 5,
+    "success_count": 0,
+    "success_rate": 0,
+    "error": "所有调用失败"
+  },
+  "cot_basic": {
+    "name": "普通CoT（CoT-Basic）",
+    "total_count": 5,
+    "success_count": 0,
+    "success_rate": 0,
+    "error": "所有调用失败"
+  },
+  "covalent": {
+    "name": "共价键（Covalent）",
+    "total_count": 5,
+    "success_count": 0,
+    "success_rate": 0,
+    "error": "所有调用失败"
+  },
+  "hydrogen": {
+    "name": "氢键（Hydrogen）",
+    "total_count": 5,
+    "success_count": 0,
+    "success_rate": 0,
+    "error": "所有调用失败"
+  },
+  "vanderwaals": {
+    "name": "范德华键（VanDerWaals）",
+    "total_count": 5,
+    "success_count": 0,
+    "success_rate": 0,
+    "error": "所有调用失败"
+  },
+  "c_plus_h": {
+    "name": "共价+氢键（C+H）",
+    "total_count": 5,
+    "success_count": 0,
+    "success_rate": 0,
+    "error": "所有调用失败"
+  },
+  "full": {
+    "name": "完整分子（Full）",
+    "total_count": 5,
+    "success_count": 0,
+    "success_rate": 0,
+    "error": "所有调用失败"
+  }
+}
